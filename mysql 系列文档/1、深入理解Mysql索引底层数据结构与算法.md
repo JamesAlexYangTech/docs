@@ -1,0 +1,553 @@
+### 理解并发、线程与等待通知机制
+
+#### 一、进程
+
+​	例如：一个应用程序就是一个进程，也就是一个app，由指令和数据组成；当我们不运行一个应用程序时，这些应用程序就是存放在磁盘上的二进制代码。当启动应用程序时，就把指令加载到cpu，数据加载到内存中；进程就是用来加载指令、管理内存、管理IO。
+
+​	当一个应用程序启动被运行，从磁盘加载这个程序的代码到内存，这时候就开启了一个进程。
+
+​	**进程是程序运行资源分配（以内存为主）的最小单位。**
+
+#### 二、线程
+
+​	线程必须依赖于进程而存在，线程是进程中的一个实体，是CPU调度的最小单位。是比进程更小，能独立运行的单位。它可以与同属于一个进程的其他线程共享该进程所拥有的全部资源。一个进程可以拥有多个线程，一个线程只能存在于一个进程。
+
+​	**线程是CPU调度的最小单位。**
+
+#### 三、进程与线程的区别
+
+​	1：进程基本上是相互独立的，而线程存在于进程内，是进程的一个子集。
+
+​	2：进程拥有的共享资源，如：内存空间等，供其内部的线程共享。
+
+​	3：进程的通信方式更为复杂。例如：网络协议等。
+
+​	4：线程通信相当于简单些，它们共享进程的内存，多个线程可以访问同一个共享变量。
+
+​	5：线程更轻量，线程上下文的切换成本要比进程上下文切换低。
+
+#### 四、CPU核心数和线程数的关系
+
+​	一个核心CPU 只能运行一个线程。也就是说CPU的内核和同时运行的线程数是1:1 的关系；
+
+​	使核心数与线程数形成1:2的关系。在我们前面的Windows任务管理器贴图就能看出来，内核数是6而逻辑处理器数是12。在Java中提供了Runtime.getRuntime().availableProcessors()，可以让我们获取当前的CPU核心数，注意这个核心数指的是逻辑处理器数。
+
+#### 五、上下文切换
+
+#### 六：并行和并发
+
+​	并行：同时多个进行的一个操作。
+
+​	并发：单位时间内的数量。
+
+#### 七、线程的创建和启动
+
+###### 	方式1：使用Thread类或者继承Thread
+
+```java
+// 创建线程 线程名字 T1
+        new Thread("T1") {
+
+            //run 方法内实现了要执行的任务
+            @Override
+            public void run() {
+                System.out.println("Hello Thread");
+                System.out.println("Thread name: " + Thread.currentThread().getName());
+            }
+        }.start();
+```
+
+###### 	方式2：实现Runnable接口配合Thread
+
+```java
+//使用Runnable接口配合 Thread类创建线程
+        //创建任务对象
+        Runnable task2 = new Runnable() {
+            @Override
+            public void run() {
+                System.out.println("Hello Thread");
+                System.out.println("Thread name: " + Thread.currentThread().getName());
+            }
+        };
+
+        //task2 是任务对象；T2是线程名字
+        Thread thread = new Thread(task2,"T2");
+        thread.start();
+
+		//Java8 lambda 精简版本
+	   Runnable task2 = () -> {
+            System.out.println("Hello Thread");
+        };
+        Thread thread = new Thread(task2,"T2");
+        thread.start();
+```
+
+​	总结：
+
+​	Thread 才是Java里对线程唯一的抽象,Runnable 只是对任务(业务逻辑)的抽象;Thread可以接受任意一个Runnable的实例并执行。
+
+​	方式1： 把线程和任务合并在一起；方式2：把线程和任务单独拆分开。
+
+​	用Runnable 让人物脱离Thread继承主体，更加灵活，更容易与线程池等高级API配合使用。
+
+###### 	方式3：FutureTask 配合Thread
+
+```java
+		//FutureTask 配合Thread
+        //FutureTask 能够接收Callable类型的参数，用来处理有返回结果的情况
+        FutureTask<Integer> task3 = new FutureTask<>(() -> {
+            System.out.println("futureTask start");
+            return 20;
+        });
+        //参数1 是任务对象;参数 是线程名字
+        new Thread(task3, "T3").start();
+        //主线程阻塞，同步等待task3执行完毕的结果
+        Integer rest = task3.get();
+        System.out.println("futureTask rest结果: " + rest);
+```
+
+​	FutureTask 实现了RunnableFuture接口； RunnableFuture继承了Runnable、Future接口；所以 FutureTask  既可以作为Runnable被线程执行，又可以作为Future 获取到Callable的返回值。
+
+###### 创建线程的几种方式：
+
+​	都是new Thread类，调用start()方法启动线程：
+
+​	1：派生自Thread类；
+
+​	2：实现Runnable接口；
+
+​	至于基于Callable接口，最终实现要把Callable接口的对象通过FutureTask包装成Runnable ；再交由Thread去执行，所以这个和Runnable接口看成同一类。
+
+###### run 和start 的区别
+
+​	通过new Thread类，只是创建了一个线程的实例，只有执行了start()才算是真正的启动线程；start()方法只是让一个线程进入就绪队列等待分配CPU，分配到CPU后才调用实现的run();
+
+​	start()方法不能重复调用，重复调用会抛出异常.会抛出 `IllegalThreadStateException`。因为启动一次后该线程的状态已经发生变化。
+
+###### 线程的生命周期
+
+​	1：初始化（NEW）：创建了一个新的线程对象，但是还没调用start()方法。
+
+​	2：运行(RUNNABLE) ：Java线程中将就绪(ready)和运行中 (running) ，统称为 运行 。线程创建后，比如：main线程调用了start()；该状态的线程处理可运行的线程池中，等待被调度线程选中，获取CPU的使用权，此时就处于就绪状态；就绪状态的线程再获得CPU时间片后变为运行中状态。
+
+​	3：阻塞(BLOCKED)：表示线程阻塞于锁。
+
+​	4：等待(WATING)：进入该种状态的线程需要等待其他线程做出一些特定的动作(通知或中断)。
+
+​	5：超时等待(TIMED_WAITING)：该状态不同于WAITING；它可以再指定的时间后自行返回。
+
+​	6：终止(TERMINATED)：表示该线程已经执行完毕。
+
+###### 线程常见的一些方法
+
+| 方法名           | static | 功能说明                                                   | 备注                                                         |
+| ---------------- | ------ | ---------------------------------------------------------- | :----------------------------------------------------------- |
+| start()          | N      | 启动一个新线程，在新的线程运行run方法中                    | start()方法只是让线程进入就绪，但是不一定立刻运行，每个线程对象的start()只能调用一次；多次调用会报异常：IllegalThreadStateException。 |
+| run()            | N      | 新线程启动后会调用的任务对象                               | 如果在构造Thread 线程对象传递了Runnable参数，则线程启动后调用Runnable 的run()。 |
+| join()           | N      | 等待线程运行结束                                           |                                                              |
+| join(long  l)    | N      | 等待线程运行结束，最多等待n 毫秒                           |                                                              |
+| getId()          | N      | 获取线程唯一长整型的ID                                     | Id 唯一                                                      |
+| getName()        | N      | 获取线程名称                                               |                                                              |
+| setName(String ) | N      | 修改线程名称                                               |                                                              |
+| getPriority()    | N      | 获取线程优先级                                             |                                                              |
+| setPriority(int) | N      | 修改线程的优先级                                           | Java中规定线程优先级是1-10的整数，比较大的优先级能提高该线程被CPU调度的几率。 |
+| getState()       | N      | 获取线程状态                                               | NEW、RUNNABLE、BLOCKED、WAITING、TIMED_WAITING、TERMINATED   |
+| isInterrupted()  | N      | 判断是否被中断                                             | 不会清除 中断标记                                            |
+| isAlive()        | N      | 线程是否存活(还没有执行完毕)                               |                                                              |
+| interrupt()      | N      | 中断线程                                                   | 如果被中断线程正在sleep、wait、join 会导致被中断的线程抛出InterruptedException，并且清除 中断标记；如果中断的正在运行的线程，则会设置中断标记；park 的线程被中断，也会设置中断标记。 |
+| interrupted()    | Y      | 判断当前线程是否被中断                                     | 会清除中断标记                                               |
+| currentThread()  | Y      | 获取当前正在执行的线程                                     |                                                              |
+| sleep(long n)    | Y      | 让当前执行的线程休眠n毫秒，休眠时让出cpu的时间片给其他线程 |                                                              |
+| yield()          | Y      | 提示线程调度器让出当前线程对CPU的使用                      |                                                              |
+|                  |        |                                                            |                                                              |
+
+#### 八、sleep 和 yield的区别
+
+###### 	sleep方法
+
+​		. 调用 sleep 会让当前线程从Running进入到 Time Waiting 状态(阻塞); 不会释放锁对象。
+
+​		. 其他线程可以使用 interrupt 防范打断正在睡眠的线程，这时sleep 方法会抛出interrupted。
+
+​		. 睡眠结束后的线程未比会立刻得到执行。
+
+​		. 建议使用 TimeUnit  的 sleep 代替Thread 的 sleep 来获得更的可读性。
+
+​		. sleep 当传入参数为0时，和 yield  相同。
+
+###### join方法
+
+​		等待调用join方法的线程结束之后，程序再继续执行，一般用于等待异步线程执行完结果之后才能继续运行的场景。
+
+​		示例代码：
+
+```java
+public static void main(String[] args) throws InterruptedException {
+        System.out.println("开始执行。。。");
+        Thread t1 = new Thread(() -> {
+            count = 1;
+            //等待1s
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            System.out.println("开始执行。。。");
+        }, "t1");
+        t1.start();
+        /**
+         * t1.join
+         * 不加 t1.join 时候的执行结果是 0
+         *  main线程和t1线程是同时执行的，t1线程的执行结果需要等待1秒才能算出结果 count =1；而main线程执行开始就要打印			count结果，所以 count = 0；
+         * 加了 t1.join 时候的执行结果是 1
+         * 因为main线程会等待t1线程执行完毕才会执行，所以t1线程的执行结果已经算出结果，main线程打印count结果时，count = 1；
+         */
+        // t1.join();
+        System.out.println("执行结果count = " + count);
+
+        System.out.println("执行结束。。。");
+    }
+```
+
+###### 	
+
+###### 现在有T1、T2、T3三个线程，你怎样保证T2在T1执行完后执行，T3在T2执行完后执行？
+
+​	join 就是等前一个线程执行完毕返回结果，下一个线程才开始执行，这样就保证了线程的顺序执行 。
+
+```java
+public static void main(String[] args) {
+
+        System.out.println("线程开始执行");
+
+        Thread t1 = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                System.out.println("线程1的name:" + Thread.currentThread().getName());
+            }
+        }, "T1");
+
+        Thread t2 = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    t1.join();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                System.out.println("线程2的name:" + Thread.currentThread().getName());
+            }
+        }, "T2");
+
+        Thread t3 = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    t2.join();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                System.out.println("线程3的name:" + Thread.currentThread().getName());
+            }
+        }, "T3");
+
+        t1.start();
+        t2.start();
+        t3.start();
+        System.out.println("执行完毕");
+```
+
+
+
+###### 守护线程
+
+​	默认情况下，Java的进程是需要所有的线程都运行结束，才会结束。
+
+​	但是守护线程，只要其他非守护线程运行结束，不管守护线程是否运行结束，Java进程也会强制结束。
+
+​	示例：
+
+```Java
+public static void main(String[] args) {
+        System.out.println(" 开始运行。。。。。。。。。。");
+        Thread t1 = new Thread(new Runnable() {
+            @Override
+            public void run() {
+
+                System.out.println(" T1 线程开始执行任务");
+                System.out.println(" 1");
+                try {
+                    Thread.sleep(3000);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                System.out.println("T1 线程 运行结束");
+            }
+        }, "t1");
+
+        t1.setDaemon(true);
+        t1.start();
+
+        //设置t1 线程为守护线程 当设置t1 线程为守护线程的情况，Java进程会强制结束，不需要等待t1的执行结果
+        System.out.println("运行结束");
+    }
+```
+
+###### 	
+
+###### 守护线程应用场景
+
+​	在一些实际的场景中：一些后台的任务，当不希望阻止Jvm进程结束时，可以采用守护线程来处理。
+
+​	1：在Jvm 垃圾回收器就采用了守护线程，如果一个线程中没有任何的用户线程，就不会产生垃圾，垃圾回收器就不需要工作和运行。
+
+​	2：在一些中间件的心跳检测、事件监听、定时异步执行任务 等场景 也可以使用守护线程；因为这些都是在后台执行的任务，当进程退出时，这些任务也不需要存在，而守护线程可以自动结束自己的生命周期。
+
+###### 	
+
+###### 线程的终止（如何正确的终止线程？）
+
+​	1：线程的自然终止；要么是本线程指令执行完毕；要么抛出一个未处理的异常导致线程提前结束。
+
+​	stop（废弃）
+
+​	调用stop 无论线程执行完还是未执行完毕，都是释放锁资源，释放CPU 资源。这会导致线程的不安全；该方法有两个问题存在：
+
+​	1：立即抛出ThreadDeath异常，在一个run方法中任何一个执行指令都有可能会抛出ThreadDeath 异常。
+
+​	2：会释放当前线程所持有的所有锁，这种锁是不可控制的。
+
+​
+
+```java
+public class ThreadStopDemo {
+
+    private static final Object lock = new Object();
+
+    private static int account1 = 100;
+    private static int account2 = 0;
+
+    public static void main(String[] args) throws InterruptedException {
+
+        Thread t1 = new Thread(new TransferTask(), "t1");
+        t1.start();
+        //等待线程T1执行任务
+        Thread.sleep(50);
+        //终止线程T1 会释放当前线程的所有锁 ，也会存在并发安全问题
+        t1.stop();
+    }
+
+    static class TransferTask implements Runnable {
+        @Override
+        public void run() {
+            synchronized (lock) {
+                try {
+                    System.out.println("转账开始。。。");
+                    account1 -= 100;
+                    try {
+                        Thread.sleep(50);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                    System.out.println("账户1余额：" + account1);
+                    account2 += 100;
+                    System.out.println("账户2余额：" + account2);
+                    System.out.println("转账结束。。。");
+                } catch (Throwable throwable) {
+                    System.out.println("线程T1异常结束");
+                    System.out.println("转账异常：" + throwable.getMessage());
+                }
+            }
+        }
+    }
+}
+```
+
+
+
+###### 中断机制
+
+
+
+#### 九、线程间的通信
+
+###### 	volatile ，最轻量级的通信/同步机制
+
+​		volatile 保证了不同线程对这个变量操作时的可见性，即 一个线程修改了某个变量值，这个新值对其他线程来说是立即可见的。
+
+​		volatile 不能保证多个线程下同时写时的线程安全，volatile 最适合的场景 ：一个线程写，多个线程读操作。
+
+```java
+public class VolatileDemo {
+
+    /**
+     * volatile
+     * 不加 volatile t1线程无法感知主线程修改stop =  true 。所以不会退出循环
+     * 加 volatile t1 能感知到主线程修改stop =  true ，退出循环
+     */
+    private static volatile boolean stop = false;
+
+    public static void main(String[] args) throws InterruptedException {
+
+        Thread t1 = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                System.out.println(" 线程 t1 开始执行。。。");
+                int i = 0;
+                while (!stop) {
+                    i++;
+                }
+                System.out.println(" 跳出循环");
+            }
+        }, "t1");
+        t1.start();
+
+        Thread.sleep(1000);
+
+        stop = true;
+        System.out.println(" 主线程修改 stop =  true");
+    }
+}
+```
+
+###### JMM Java内存模型
+
+![doc](./iamge/doc-1722326040085-21.jpg)
+
+​		. 难以降低开销，如果降低睡眠的时间，比如休眠1 毫秒，这样消费者能更加迅速的发现条件变化，但是却可能 消耗更多的处理器资源，造成无端的浪费。
+
+​		等待/通知机制则可以很好的避免上面的问题。
+
+#### 十、等待/通知机制
+
+##### Object#wait 、notify 、notifyAll
+
+​	**等待通知机制可以基于对象的wait、notify 方法来实现，在一个线程内调用该线程锁对象的wait()方法；线程将进入等待队列 进行等待直到被唤醒。**
+
+- [ ] ​	notify（）：通知一个在对象上等待的线程，使其从wait（）返回，而返回的前提是 该线程获取了该对象的锁；没有获得锁的线程重新进入 WAITING状态。
+
+- [ ] ​    notifyAll（）：通知中所有等待在该对象上的线程，尽可能用notifyALl（）；谨慎使用notify（）；因为notify （） 只会唤醒一个线程，我们无法被确保唤醒的这个线程一定是我们需要唤醒的线程。
+
+- [ ] ​    wait（）：调用该方法的线程进入 WAITING状态，只有等待另外线程的通知或者被中断才会返回，**需要注意：调用wait（）方法后会释放对象的锁。**
+
+- [ ] wait（long）：超时等待一段时间，这里的参数时间是毫秒，也就是等待时长达n毫秒，如果没有通知就超时返回。
+
+- [ ] wait（long，int）：对于超时时间更加细粒度控制；可以达到纳秒。
+
+  ##### 等待方需要遵循的原则：
+
+  1）：获得对象的锁；
+
+  2）：如果条件不满足，那么调用对象的wait（）方法；被通知后仍要进行条件检查。
+
+  3）：条件满足则执行对应的逻辑。
+
+  ```java
+  synchronized(对象) {
+  	while (条件不满足) {
+  			对象
+  			wait();
+  		}
+  		对应的逻辑
+  	}
+  ```
+
+  ##### 通知方需要遵循的原则
+
+  1）：获取对象的锁。
+
+  2）：改变的条件。
+
+  3）：通知所有等待在对象上的线程。
+
+  ```java
+  synchronized(对象) {
+      改变条件
+  	对象.notifuAll();
+  	}
+  ```
+
+  ```java
+  等待/通知 示例：
+  
+  /**
+   * @author zhouYang
+   * @ClassName WaitDemo
+   * @Description TODO
+   * @create 2024-07-29 19:31
+   */
+  public class WaitDemo {
+      public static void main(String[] args) throws InterruptedException {
+          Object lock = new Object();
+          Thread t1 = new Thread(() -> {
+              try {
+                  System.out.println("线程开始执行");
+                  synchronized (lock) {
+                      lock.wait();
+                      System.out.println("线程执行结束");
+                  }
+              } catch (Exception e) {
+                  e.printStackTrace();
+              }
+              System.out.println("线程执行结束");
+          }, "t1");
+          t1.start();
+  
+          //保证线程t1先启动，wait()先执行
+          Thread.sleep(1000);
+          //创建t2线程
+          Thread t2 = new Thread(() -> {
+              synchronized (lock) {
+                  System.out.println("notify 开始");
+                  lock.notifyAll();
+                  System.out.println("notify 结束");
+              }
+          }, "t2");
+          t2.start();
+      }
+  }
+  ```
+
+
+
+##### LockSupport# park / unpark
+
+LockSupport 是 JDK 中用来实现线程阻塞和唤醒的工具， 线程调用park 则等待 ‘许可’， 调用unpark 则为指定线程提供 ‘许可’。LockSupport 很类似于二元信号量 （只有1个许可证可供使用），如果这个许可证还没有被占用，当前线程获取许可并继续执行；如果许可已被占用，当前线程阻塞，等待获取许可。<font color='red'>使用他可以再任何场合使线程阻塞。 可以指定任何线程进行唤醒，并且不用担心阻塞和唤醒操作的顺序问题，但是要注意的是连续的多次唤醒和一次唤醒是一样的。</font>
+
+Java锁和同步器框架的核心  AQS： AbstractQueuedSynchronizer，就是通过调用LockSupport.park() 和LockSupport.unpark()  实现线程的阻塞和唤醒。
+
+```java
+/**
+	阻塞、 唤醒 线程
+ * @author zhouYang
+ * @ClassName LockSupportDemo
+ * @Description TODO
+ * @create 2024-07-29 20:04
+ */
+public class LockSupportDemo {
+    public static void main(String[] args) throws InterruptedException {
+
+        Thread t1 = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                System.out.println("LockSupport.park() 开始。。。");
+                //当没有【许可】时，当前线程暂停运行有【许可】时，用掉这个【许可】，当前线程恢复运行
+                LockSupport.park();
+                System.out.println("LockSupport.park() 结束");
+            }
+        }, "t1");
+        t1.start();
+
+        Thread.sleep(1000);
+
+        System.out.println("LockSupport.unpark(t1) 开始。。。");
+        LockSupport.unpark(t1);
+        System.out.println("LockSupport.unpark(t1) 结束");
+    }
+}
+```
+
+1：LockSupport.park() 和LockSupport.unpark() 随时随地都可以调用，而wait 和notify 只能在sunchronzied 代码段中调用。
+
+2：LockSupport允许先调用unpark(Thread t) ，后调用park();如果 Thread1 先调用unpark (Thread2),  然后线程2 后调用park();线程2 是不会阻塞的。如果线程1 先嗲用 notify，然后线程2再调用wait(); 线程2是会被阻塞的。
+
